@@ -1,2 +1,2 @@
 [workspace]
-members = ["pallet-collectables"]
+members = ["pallet-*"]
