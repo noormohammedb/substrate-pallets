@@ -1548,6 +1548,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-event"
+version = "1.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+]
+
+[[package]]
 name = "pallet-hello-world"
 version = "0.1.0"
 dependencies = [

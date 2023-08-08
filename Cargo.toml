@@ -1,2 +1,7 @@
 [workspace]
-members = ["pallet-*"]
+members = [
+  "pallet-template",
+  "pallet-collectables",
+  "pallet-hello-world",
+  "pallet-event",
+]
