@@ -1,7 +1,14 @@
+[workspace.package]
+edition = "2021"
+
 [workspace]
 members = [
   "pallet-template",
   "pallet-collectables",
   "pallet-hello-world",
   "pallet-event",
+  "pallet-token-distribution",
 ]
+resolver = "2"
+
+exclude = []
