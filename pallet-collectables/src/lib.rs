@@ -61,10 +61,25 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		Created { kitty: [u8; 16], owner: T::AccountId },
-		Transferred { from: T::AccountId, to: T::AccountId, kitty: [u8; 16] },
-		PriceSet { kitty: [u8; 16], price: Option<BalanceOf<T>> },
-		Sold { seller: T::AccountId, buyer: T::AccountId, kitty: [u8; 16], price: BalanceOf<T> },
+		Created {
+			kitty: [u8; 16],
+			owner: T::AccountId,
+		},
+		Transferred {
+			from: T::AccountId,
+			to: T::AccountId,
+			kitty: [u8; 16],
+		},
+		PriceSet {
+			kitty: [u8; 16],
+			price: Option<BalanceOf<T>>,
+		},
+		Sold {
+			seller: T::AccountId,
+			buyer: T::AccountId,
+			kitty: [u8; 16],
+			price: BalanceOf<T>,
+		},
 	}
 
 	#[pallet::error]
@@ -116,7 +131,10 @@ pub mod pallet {
 			ensure!(kitty.owner == sender, Error::<T>::NotOwner);
 			kitty.price = price;
 			Kitties::<T>::insert(kitty_id, kitty);
-			Self::deposit_event(Event::PriceSet { kitty: kitty_id, price });
+			Self::deposit_event(Event::PriceSet {
+				kitty: kitty_id,
+				price,
+			});
 
 			Ok(())
 		}
@@ -147,8 +165,16 @@ pub mod pallet {
 			dna: [u8; 16],
 			gender: Gender,
 		) -> Result<[u8; 16], DispatchError> {
-			let kitty = Kitty::<T> { dna, price: None, gender, owner: owner.clone() };
-			ensure!(!Kitties::<T>::contains_key(&kitty.dna), Error::<T>::DuplicateKitty);
+			let kitty = Kitty::<T> {
+				dna,
+				price: None,
+				gender,
+				owner: owner.clone(),
+			};
+			ensure!(
+				!Kitties::<T>::contains_key(&kitty.dna),
+				Error::<T>::DuplicateKitty
+			);
 			let count = CountForKitties::<T>::get();
 			let new_count = count.checked_add(1).ok_or(Error::<T>::Overflow)?;
 			KittiesOwned::<T>::try_append(&owner, kitty.dna)
@@ -157,7 +183,10 @@ pub mod pallet {
 			Kitties::<T>::insert(kitty.dna, kitty);
 			CountForKitties::<T>::put(new_count);
 
-			Self::deposit_event(Event::Created { kitty: dna, owner: owner.clone() });
+			Self::deposit_event(Event::Created {
+				kitty: dna,
+				owner: owner.clone(),
+			});
 			Ok(dna)
 		}
 
@@ -172,12 +201,14 @@ pub mod pallet {
 			if let Some(ind) = from_owned.iter().position(|&id| id == kitty_id) {
 				from_owned.swap_remove(ind);
 			} else {
-				return Err(Error::<T>::NoKitty.into())
+				return Err(Error::<T>::NoKitty.into());
 			}
 
 			let mut to_owned = KittiesOwned::<T>::get(&to);
 
-			let _ = to_owned.try_push(kitty_id).map_err(|_| Error::<T>::TooManyOwned);
+			let _ = to_owned
+				.try_push(kitty_id)
+				.map_err(|_| Error::<T>::TooManyOwned);
 
 			kitty.owner = to.clone();
 			kitty.price = None;
@@ -186,7 +217,11 @@ pub mod pallet {
 			KittiesOwned::<T>::insert(&to, to_owned);
 			KittiesOwned::<T>::insert(&from, from_owned);
 
-			Self::deposit_event(Event::Transferred { from, to, kitty: kitty_id });
+			Self::deposit_event(Event::Transferred {
+				from,
+				to,
+				kitty: kitty_id,
+			});
 
 			Ok(())
 		}
@@ -209,7 +244,7 @@ pub mod pallet {
 				)?;
 				let _ = Self::do_transfer(kitty_id, to);
 			} else {
-				return Err(Error::<T>::NotForSale.into())
+				return Err(Error::<T>::NotForSale.into());
 			}
 
 			Ok(())
