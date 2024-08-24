@@ -1,2 +1,1 @@
-# All the custom pallets build by learning each substrate concepts
-
+# All the custom pallets and frame examples
