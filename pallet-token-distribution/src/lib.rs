@@ -53,9 +53,40 @@ pub mod pallet {
 	pub type Holdings<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, (PalletTokenBalance, BlockNumberFor<T>)>;
 
+	/// hook will read on every block, so its better to whitelisting
+	#[pallet::storage]
+	#[pallet::whitelist_storage]
+	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>>;
+
 	/*
 	 *  		Config genesis
 	 */
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			let current_epoch = Self::block_to_epoch(current_block);
+			if current_epoch > LastMintBlock::<T>::get().unwrap_or_default() {
+				// mint new token to pool
+				// update last minted block
+				// update total issue
+
+				let mint_amount = T::MintAmountPerEpoch::get();
+				TotalIssue::<T>::mutate_extant(|current_total| {
+					current_total.saturating_add(mint_amount)
+				});
+
+				Holdings::<T>::mutate_extant(T::PoolAddress::get(), |(pool_balance, _)| {
+					(pool_balance.saturating_sub(mint_amount), current_block)
+				});
+				LastMintBlock::<T>::set(Some(current_epoch));
+
+				return T::DbWeight::get().reads_writes(3, 3);
+			}
+
+			T::DbWeight::get().reads(1)
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -157,12 +188,12 @@ pub mod pallet {
 		pub fn claim_transfer(to: T::AccountId, amount: PalletTokenBalance) {
 			let current_block = <frame_system::Pallet<T>>::block_number();
 
-			Holdings::<T>::mutate_extant(T::PoolAddress::get(), |(pool_balance, _)| {
-				(
-					pool_balance.saturating_sub(amount),
-					BlockNumberFor::<T>::default(),
-				)
-			});
+			Holdings::<T>::mutate_extant(
+				T::PoolAddress::get(),
+				|(pool_balance, last_minted_block)| {
+					(pool_balance.saturating_sub(amount), *last_minted_block)
+				},
+			);
 
 			Holdings::<T>::mutate_extant(to, |(user_balance, _)| {
 				(user_balance.saturating_add(amount), current_block)
