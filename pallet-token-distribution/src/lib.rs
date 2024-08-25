@@ -12,44 +12,144 @@ pub use pallet::*;
 
 #[polkadot_sdk_frame::pallet]
 pub mod pallet {
+
 	use super::*;
 
-	// use polkadot_sdk_frame::deps::frame_support::pallet_prelude::*;
-	use polkadot_sdk_frame::deps::frame_support::traits::fungible;
+	use polkadot_sdk_frame::traits::{CheckedDiv, SaturatedConversion, Saturating};
 
-	pub type BalanceOf<T> = <<T as Config>::NativeBalance as fungible::Inspect<
-		<T as frame_system::Config>::AccountId,
-	>>::Balance;
+	pub type PalletTokenBalance = u128;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type NativeBalance: fungible::Inspect<Self::AccountId>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		#[pallet::constant(10)]
+		type EpochPeriod: Get<BlockNumberFor<Self>>;
+
+		#[pallet::constant(10)]
+		type MintAmountPerEpoch: Get<PalletTokenBalance>;
+
+		#[pallet::constant("706F6F6C")]
+		type PoolAddress: Get<Self::AccountId>;
 	}
 
 	// to calculate % while claiming rewards
 	#[pallet::storage]
-	pub type GenesisTotalIssue<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub type GenesisTotalIssue<T: Config> = StorageValue<_, PalletTokenBalance, ValueQuery>;
 
 	// reward distribution is based on the genesis holding %
 	#[pallet::storage]
 	pub type GenesisHolders<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, BalanceOf<T>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, PalletTokenBalance>;
+
+	#[pallet::storage]
+	pub type TotalIssue<T: Config> = StorageValue<_, PalletTokenBalance>;
 
 	// (balance, last_claimed_block_number)
 	#[pallet::storage]
 	pub type Holdings<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (BalanceOf<T>, BlockNumberFor<T>)>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, (PalletTokenBalance, BlockNumberFor<T>)>;
+
+	/*
+	 *  		Config genesis
+	 */
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T> {
+		SomeEvent,
+		Claim(PalletTokenBalance),
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		SomeError,
+		GenesisHoldersOnlyEligibleToClaim,
+		NoTokenHolding,
+		WaitUntilNextEpoch,
+		CantClaimZeroToken,
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
 		#[pallet::weight(Weight::from_parts(10_000, 10_000))]
+		pub fn claim_pool_reward(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let genesis_holding_data = GenesisHolders::<T>::get(&who);
+			ensure!(
+				genesis_holding_data.is_some(),
+				Error::<T>::GenesisHoldersOnlyEligibleToClaim
+			);
+
+			let current_epoch = Self::current_epoch();
+
+			let holding_data = Holdings::<T>::get(&who);
+			ensure!(holding_data.is_some(), Error::<T>::NoTokenHolding);
+
+			let (_token_balance, last_claimed_block) = holding_data.unwrap_or_default();
+			let last_claimed_epoch = Self::block_to_epoch(last_claimed_block); // impl epoch calculation logic later
+
+			ensure!(
+				current_epoch > last_claimed_epoch,
+				Error::<T>::WaitUntilNextEpoch
+			);
+
+			// calculate how many epoch elapsed since last claim
+			// then calculate reward based on the % of holding at genesis
+			// update both token balance and last_claimed_block_number
+
+			let elapsed_epoch_count: u128 = ((current_epoch.saturating_sub(last_claimed_epoch))
+				.checked_div(&T::EpochPeriod::get()))
+			.unwrap_or_default()
+			.saturated_into();
+
+			let total_mited_to_pool_from_last_claim =
+				T::MintAmountPerEpoch::get().saturating_mul(elapsed_epoch_count);
+
+			let claimable_token = genesis_holding_data
+				.unwrap_or_default()
+				.saturating_mul(total_mited_to_pool_from_last_claim)
+				.saturating_div(GenesisTotalIssue::<T>::get());
+
+			ensure!(claimable_token > 0, Error::<T>::CantClaimZeroToken);
+
+			// transfer token from pool to user
+			// implement transfer logic
+
+			/* claim from pool ()
+			*
+			* 1. transfer token from pool to user with transfer method
+			* 2. update user's holding's with new balance and last_claimed_block_number as current block number
+
+			*
+			*/
+
+			Self::deposit_event(Event::<T>::Claim(claimable_token));
+
+			Ok(())
+		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight(Weight::from_parts(10_000, 10_000))]
 		pub fn example_extrinsic(origin: OriginFor<T>) -> DispatchResult {
 			let _who = ensure_signed(origin)?;
 			Ok(())
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		// utility functions
+		pub fn current_epoch() -> BlockNumberFor<T> {
+			Self::block_to_epoch(<frame_system::Pallet<T>>::block_number())
+		}
+
+		pub fn block_to_epoch(block_number: BlockNumberFor<T>) -> BlockNumberFor<T> {
+			let epoch_period = T::EpochPeriod::get();
+			(block_number / epoch_period) * epoch_period
 		}
 	}
 }
