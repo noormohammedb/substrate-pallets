@@ -71,6 +71,8 @@ pub mod pallet {
 		NoTokenHolding,
 		WaitUntilNextEpoch,
 		CantClaimZeroToken,
+		PoolNotInitialized,
+		SomethingWentWrongOnClaimCalculation,
 	}
 
 	#[pallet::call]
@@ -98,35 +100,35 @@ pub mod pallet {
 				Error::<T>::WaitUntilNextEpoch
 			);
 
-			// calculate how many epoch elapsed since last claim
+			// calculating how many epoch elapsed since last claim
 			// then calculate reward based on the % of holding at genesis
 			// update both token balance and last_claimed_block_number
 
-			let elapsed_epoch_count: u128 = ((current_epoch.saturating_sub(last_claimed_epoch))
+			let elapsed_epochs: u128 = ((current_epoch.saturating_sub(last_claimed_epoch))
 				.checked_div(&T::EpochPeriod::get()))
 			.unwrap_or_default()
 			.saturated_into();
 
 			let total_mited_to_pool_from_last_claim =
-				T::MintAmountPerEpoch::get().saturating_mul(elapsed_epoch_count);
+				T::MintAmountPerEpoch::get().saturating_mul(elapsed_epochs);
 
 			let claimable_token = genesis_holding_data
 				.unwrap_or_default()
 				.saturating_mul(total_mited_to_pool_from_last_claim)
 				.saturating_div(GenesisTotalIssue::<T>::get());
 
+			// some sanity checks
 			ensure!(claimable_token > 0, Error::<T>::CantClaimZeroToken);
+			let pool_holding_data = Holdings::<T>::get(&T::PoolAddress::get());
+			ensure!(pool_holding_data.is_some(), Error::<T>::PoolNotInitialized);
 
-			// transfer token from pool to user
-			// implement transfer logic
+			let pool_balance = pool_holding_data.unwrap_or_default().0;
+			ensure!(
+				pool_balance >= claimable_token,
+				Error::<T>::SomethingWentWrongOnClaimCalculation
+			);
 
-			/* claim from pool ()
-			*
-			* 1. transfer token from pool to user with transfer method
-			* 2. update user's holding's with new balance and last_claimed_block_number as current block number
-
-			*
-			*/
+			Self::claim_transfer(who, claimable_token);
 
 			Self::deposit_event(Event::<T>::Claim(claimable_token));
 
@@ -150,6 +152,21 @@ pub mod pallet {
 		pub fn block_to_epoch(block_number: BlockNumberFor<T>) -> BlockNumberFor<T> {
 			let epoch_period = T::EpochPeriod::get();
 			(block_number / epoch_period) * epoch_period
+		}
+
+		pub fn claim_transfer(to: T::AccountId, amount: PalletTokenBalance) {
+			let current_block = <frame_system::Pallet<T>>::block_number();
+
+			Holdings::<T>::mutate_extant(T::PoolAddress::get(), |(pool_balance, _)| {
+				(
+					pool_balance.saturating_sub(amount),
+					BlockNumberFor::<T>::default(),
+				)
+			});
+
+			Holdings::<T>::mutate_extant(to, |(user_balance, _)| {
+				(user_balance.saturating_add(amount), current_block)
+			});
 		}
 	}
 }
