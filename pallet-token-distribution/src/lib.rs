@@ -15,7 +15,7 @@ pub mod pallet {
 
 	use super::*;
 
-	use polkadot_sdk_frame::traits::{CheckedDiv, SaturatedConversion, Saturating};
+	use polkadot_sdk_frame::traits::{CheckedDiv, SaturatedConversion, Saturating, Zero};
 
 	pub type PalletTokenBalance = u128;
 
@@ -58,9 +58,28 @@ pub mod pallet {
 	#[pallet::whitelist_storage]
 	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>>;
 
-	/*
-	 *  		Config genesis
-	 */
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		initial_token_distribution: Vec<(T::AccountId, PalletTokenBalance)>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+		fn build(&self) {
+			let total_issue =
+				self.initial_token_distribution
+					.iter()
+					.fold(0, |acc, (who, balance)| {
+						GenesisHolders::<T>::insert(who, balance);
+						Holdings::<T>::insert(who, (balance, BlockNumberFor::<T>::zero()));
+
+						acc.saturating_add(*balance)
+					});
+
+			TotalIssue::<T>::put(total_issue);
+			GenesisTotalIssue::<T>::put(total_issue);
+		}
+	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
