@@ -2289,6 +2289,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
+name = "pallet-balances"
+version = "38.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "267f2b4c64e06d340fab1e48267e815dc2afaf8e6da16369b26b5c9e1e65f1aa"
+dependencies = [
+ "docify",
+ "frame-benchmarking",
+ "frame-support 37.0.0",
+ "frame-system 37.1.0",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime 39.0.0",
+]
+
+[[package]]
 name = "pallet-collectables"
 version = "0.1.0"
 dependencies = [
@@ -2334,6 +2350,7 @@ dependencies = [
 name = "pallet-token-distribution"
 version = "0.1.0"
 dependencies = [
+ "pallet-balances",
  "parity-scale-codec",
  "polkadot-sdk-frame",
  "scale-info",

@@ -10,6 +10,12 @@ use polkadot_sdk_frame::prelude::*;
 // Re-export all pallet parts, this is needed to properly import the pallet into the runtime.
 pub use pallet::*;
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 #[polkadot_sdk_frame::pallet]
 pub mod pallet {
 
@@ -60,7 +66,15 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		initial_token_distribution: Vec<(T::AccountId, PalletTokenBalance)>,
+		pub initial_token_distribution: Vec<(T::AccountId, PalletTokenBalance)>,
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				initial_token_distribution: Default::default(),
+			}
+		}
 	}
 
 	#[pallet::genesis_build]

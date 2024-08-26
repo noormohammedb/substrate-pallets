@@ -25,3 +25,6 @@ scale-info = { version = "2.11.1", default-features = false, features = [
 [features]
 default = ["std"]
 std = ["codec/std", "polkadot-sdk-frame/std", "scale-info/std"]
+
+[dev-dependencies]
+pallet-balances = "38.0.0"
