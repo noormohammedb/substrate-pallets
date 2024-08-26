@@ -54,7 +54,8 @@ impl pallet_token_distribution::Config for Test {
 }
 
 pub fn genesis_data() -> Vec<(u64, u128)> {
-	vec![(1, 150), (2, 200), (3, 250)]
+	// vec![(1, 150), (2, 200), (3, 250)]
+	vec![(1, 500), (2, 500)] // for scenario on requirement
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
