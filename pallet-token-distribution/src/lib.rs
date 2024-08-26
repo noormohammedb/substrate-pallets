@@ -105,7 +105,7 @@ pub mod pallet {
 
 				Holdings::<T>::mutate(T::PoolAddress::get(), |holding| {
 					if let Some((balance_pool, _)) = holding {
-						*balance_pool = balance_pool.saturating_sub(mint_amount);
+						*balance_pool = balance_pool.saturating_add(mint_amount);
 					} else {
 						*holding = Some((mint_amount, BlockNumberFor::<T>::zero()));
 					}
@@ -124,9 +124,9 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T> {
+	pub enum Event<T: Config> {
 		Mint(PalletTokenBalance),
-		Claim(PalletTokenBalance),
+		Claim(T::AccountId, PalletTokenBalance),
 	}
 
 	#[pallet::error]

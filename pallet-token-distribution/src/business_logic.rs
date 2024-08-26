@@ -14,7 +14,7 @@ impl<T: Config> Pallet<T> {
 		let holding_data = Holdings::<T>::get(&who);
 		ensure!(holding_data.is_some(), Error::<T>::NoTokenHolding);
 
-		let (_token_balance, last_claimed_block) = holding_data.unwrap_or_default();
+		let (_, last_claimed_block) = holding_data.unwrap_or_default();
 		let last_claimed_epoch = Self::block_to_epoch(last_claimed_block);
 
 		ensure!(
@@ -22,7 +22,8 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::WaitUntilNextEpoch
 		);
 
-		let elapsed_epochs: u128 = ((current_epoch.saturating_sub(last_claimed_epoch))
+		let elapsed_epochs: u128 = (current_epoch
+			.saturating_sub(last_claimed_epoch)
 			.checked_div(&T::EpochPeriod::get()))
 		.unwrap_or_default()
 		.saturated_into();
@@ -46,9 +47,9 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::SomethingWentWrongOnClaimCalculation
 		);
 
-		Self::claim_transfer(who, claimable_token);
+		Self::claim_transfer(&who, claimable_token);
 
-		Self::deposit_event(Event::<T>::Claim(claimable_token));
+		Self::deposit_event(Event::<T>::Claim(who, claimable_token));
 		Ok(())
 	}
 }
@@ -64,18 +65,18 @@ impl<T: Config> Pallet<T> {
 		(block_number / epoch_period) * epoch_period
 	}
 
-	pub fn claim_transfer(to: T::AccountId, amount: PalletTokenBalance) {
-		let current_block = <frame_system::Pallet<T>>::block_number();
+	pub fn claim_transfer(to: &T::AccountId, amount: PalletTokenBalance) {
+		Holdings::<T>::mutate(T::PoolAddress::get(), |holding| {
+			if let Some((pool_balance, _)) = holding {
+				*pool_balance = pool_balance.saturating_sub(amount);
+			}
+		});
 
-		Holdings::<T>::mutate_extant(
-			T::PoolAddress::get(),
-			|(pool_balance, last_minted_block)| {
-				(pool_balance.saturating_sub(amount), *last_minted_block)
-			},
-		);
-
-		Holdings::<T>::mutate_extant(to, |(user_balance, _)| {
-			(user_balance.saturating_add(amount), current_block)
+		Holdings::<T>::mutate(to, |holding| {
+			if let Some((user_balance, last_claimed_block)) = holding {
+				*user_balance = user_balance.saturating_add(amount);
+				*last_claimed_block = <frame_system::Pallet<T>>::block_number();
+			}
 		});
 	}
 }
