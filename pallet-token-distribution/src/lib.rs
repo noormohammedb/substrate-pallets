@@ -58,7 +58,7 @@ pub mod pallet {
 	/// hook will read on every block, so its better to whitelisting
 	#[pallet::storage]
 	#[pallet::whitelist_storage]
-	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>>;
+	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -95,16 +95,23 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let current_epoch = Self::block_to_epoch(current_block);
-			if current_epoch > LastMintBlock::<T>::get().unwrap_or_default() {
+			if current_epoch > LastMintBlock::<T>::get() {
 				let mint_amount = T::MintAmountPerEpoch::get();
-				TotalIssue::<T>::mutate_extant(|current_total| {
-					current_total.saturating_add(mint_amount)
+				TotalIssue::<T>::mutate(|current_total| {
+					if let Some(total_current) = current_total {
+						*total_current = total_current.saturating_add(mint_amount);
+					}
 				});
 
-				Holdings::<T>::mutate_extant(T::PoolAddress::get(), |(pool_balance, _)| {
-					(pool_balance.saturating_sub(mint_amount), current_block)
+				Holdings::<T>::mutate(T::PoolAddress::get(), |holding| {
+					if let Some((balance_pool, _)) = holding {
+						*balance_pool = balance_pool.saturating_sub(mint_amount);
+					} else {
+						*holding = Some((mint_amount, BlockNumberFor::<T>::zero()));
+					}
 				});
-				LastMintBlock::<T>::set(Some(current_epoch));
+
+				LastMintBlock::<T>::set(current_epoch);
 
 				Self::deposit_event(Event::<T>::Mint(mint_amount));
 
